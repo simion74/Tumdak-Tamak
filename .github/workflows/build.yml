@@ -43,17 +43,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Regenerate Gradle wrapper (FlutLab exports don't include it)
+      - name: Restore Gradle wrapper files (FlutLab exports don't include them)
         # FlutLab strips the executable android/gradlew, gradlew.bat and
-        # gradle-wrapper.jar from project exports. They're easy to regenerate
-        # from android/gradle/wrapper/gradle-wrapper.properties (which IS
-        # still present and pins the exact Gradle version), so we do that
-        # here instead of committing binary wrapper files to the repo.
+        # gradle-wrapper.jar from project exports. Instead of running
+        # `gradle wrapper` (which depends on whatever Gradle version happens
+        # to be pre-installed on the runner — that version changes over time
+        # and a newer one can be too new to even evaluate this project's
+        # older-style build.gradle files, which is exactly what broke here),
+        # we fetch the exact wrapper files for the pinned version directly
+        # from the Gradle project's own repo. This has nothing to do with
+        # the runner's system Gradle at all, so it can't drift/break again.
         run: |
           cd android
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 7.6.3 --distribution-type all
-          fi
+          mkdir -p gradle/wrapper
+          curl -sSL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradle/wrapper/gradle-wrapper.jar
+          curl -sSL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew
+          curl -sSL -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew.bat
           chmod +x gradlew
 
       - name: Static analysis (non-blocking)
