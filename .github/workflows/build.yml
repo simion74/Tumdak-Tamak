@@ -1,0 +1,110 @@
+name: Build Android APK
+
+# Runs automatically on every push/PR to main, and can also be triggered
+# manually from the "Actions" tab in GitHub (workflow_dispatch) any time you
+# just want a fresh APK without pushing a commit.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch: {}
+
+# Pin the exact Flutter version here so a build today and a build next year
+# behave the same. Bump this manually (and re-run) if you later upgrade
+# packages in pubspec.yaml that need a newer Flutter/Dart SDK.
+env:
+  FLUTTER_VERSION: "3.19.6"
+
+jobs:
+  build-android:
+    name: Android APK (debug + release)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by Android Gradle Plugin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: "stable"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Regenerate Gradle wrapper (FlutLab exports don't include it)
+        # FlutLab strips the executable android/gradlew, gradlew.bat and
+        # gradle-wrapper.jar from project exports. They're easy to regenerate
+        # from android/gradle/wrapper/gradle-wrapper.properties (which IS
+        # still present and pins the exact Gradle version), so we do that
+        # here instead of committing binary wrapper files to the repo.
+        run: |
+          cd android
+          if [ ! -f gradlew ]; then
+            gradle wrapper --gradle-version 7.6.3 --distribution-type all
+          fi
+          chmod +x gradlew
+
+      - name: Static analysis (non-blocking)
+        run: flutter analyze || true
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Build release APK
+        # NOTE: this app has no release signing key configured yet
+        # (android/app/build.gradle currently signs release builds with the
+        # built-in debug key — see the TODO comment there). That's fine for
+        # your own testing/installing on a phone, but before publishing to
+        # the Play Store you must generate a real upload keystore and wire
+        # it in (see README "Play Store এ পাবলিশ করার আগে" section).
+        run: flutter build apk --release
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tumdak-tamak-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+
+      - name: Upload release APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tumdak-tamak-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+  build-ios-unsigned:
+    name: iOS build (unsigned, no IPA)
+    runs-on: macos-latest
+    # iOS builds need a paid Apple Developer signing certificate to produce
+    # an installable .ipa. This job only proves the iOS side compiles
+    # cleanly (catches Swift/Podfile/plugin issues early) — it does not
+    # produce something installable on a real iPhone. Safe to remove this
+    # job entirely if you don't have a Mac/Apple account and don't need it
+    # yet; the Android job above is independent of it.
+    continue-on-error: true
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: "stable"
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
