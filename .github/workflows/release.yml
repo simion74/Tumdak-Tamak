@@ -9,7 +9,7 @@ on:
       - "v*"
 
 env:
-  FLUTTER_VERSION: "3.19.6"
+  FLUTTER_VERSION: "3.24.5"
 
 permissions:
   contents: write
@@ -37,12 +37,13 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Regenerate Gradle wrapper (FlutLab exports don't include it)
+      - name: Restore Gradle wrapper files (FlutLab exports don't include them)
         run: |
           cd android
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 7.6.3 --distribution-type all
-          fi
+          mkdir -p gradle/wrapper
+          curl -sSL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradle/wrapper/gradle-wrapper.jar
+          curl -sSL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew
+          curl -sSL -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew.bat
           chmod +x gradlew
 
       - name: Build release APK
