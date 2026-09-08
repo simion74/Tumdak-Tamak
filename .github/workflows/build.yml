@@ -13,8 +13,11 @@ on:
 # Pin the exact Flutter version here so a build today and a build next year
 # behave the same. Bump this manually (and re-run) if you later upgrade
 # packages in pubspec.yaml that need a newer Flutter/Dart SDK.
+# NOTE: 3.19.6 was tried first but its bundled Dart SDK (3.3.4) is too old
+# for file_picker >=8.1.0 (needs Dart >=3.4.0) — that's why this is now
+# 3.24.5 (bundles Dart 3.5.x).
 env:
-  FLUTTER_VERSION: "3.19.6"
+  FLUTTER_VERSION: "3.24.5"
 
 jobs:
   build-android:
@@ -82,29 +85,7 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
-  build-ios-unsigned:
-    name: iOS build (unsigned, no IPA)
-    runs-on: macos-latest
-    # iOS builds need a paid Apple Developer signing certificate to produce
-    # an installable .ipa. This job only proves the iOS side compiles
-    # cleanly (catches Swift/Podfile/plugin issues early) — it does not
-    # produce something installable on a real iPhone. Safe to remove this
-    # job entirely if you don't have a Mac/Apple account and don't need it
-    # yet; the Android job above is independent of it.
-    continue-on-error: true
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: "stable"
-          cache: true
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Build iOS (no codesign)
-        run: flutter build ios --release --no-codesign
+# iOS build job removed for now (not needed yet) — Android-only build above.
+# If you want it back later, it's easy to re-add: a separate job with
+# runs-on: macos-latest, the same Flutter setup, then
+# `flutter build ios --release --no-codesign`.
