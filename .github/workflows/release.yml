@@ -9,7 +9,7 @@ on:
       - "v*"
 
 env:
-  FLUTTER_VERSION: "3.24.5"
+  FLUTTER_VERSION: "3.32.8"
 
 permissions:
   contents: write
@@ -41,9 +41,9 @@ jobs:
         run: |
           cd android
           mkdir -p gradle/wrapper
-          curl -sSL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradle/wrapper/gradle-wrapper.jar
-          curl -sSL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew
-          curl -sSL -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v7.6.3/gradlew.bat
+          curl -sSL -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.6.0/gradle/wrapper/gradle-wrapper.jar
+          curl -sSL -o gradlew https://raw.githubusercontent.com/gradle/gradle/v8.6.0/gradlew
+          curl -sSL -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v8.6.0/gradlew.bat
           chmod +x gradlew
 
       - name: Build release APK
