@@ -157,8 +157,8 @@ class _TumdakPageState extends State<TumdakPage> {
                             child: EqSidePanel(
                               title: 'Tumdak — EQ',
                               channels: [
-                                EqChannel(soundId: leftSound, title: 'বাম প্যাড'),
-                                EqChannel(soundId: rightSound, title: 'ডান প্যাড'),
+                                EqChannel(soundId: leftSound, title: 'Left Pad'),
+                                EqChannel(soundId: rightSound, title: 'Right Pad'),
                               ],
                               onClose: () => setState(() => _eqOpen = false),
                             ),

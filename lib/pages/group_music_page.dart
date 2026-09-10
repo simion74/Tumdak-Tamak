@@ -18,8 +18,9 @@ import 'settings_page.dart';
 /// phones rather than in a preview/emulator. This page wires up the full
 /// screen flow (find nearby devices → tick which ones to add → the phone
 /// that started the session becomes the "main"/output device → session
-/// controls), with the device discovery itself mocked for now — swapping
-/// in a real discovery package later only touches [_startSearch].
+/// controls). [_startSearch] currently and honestly finds nothing (no
+/// fake/demo devices) — wiring in a real discovery package later only
+/// touches that one method.
 class GroupMusicPage extends StatefulWidget {
   const GroupMusicPage({super.key});
 
@@ -57,16 +58,11 @@ class _GroupMusicPageState extends State<GroupMusicPage> {
       _found.clear();
       _connected.clear();
     });
-    // --- MOCK discovery: replace with a real nearby-device scan later ---
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    setState(() => _found.add(_NearbyDevice("Rahim's Phone")));
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-    setState(() => _found.add(_NearbyDevice("Karim's Phone")));
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    setState(() => _found.add(_NearbyDevice("Salma's Phone")));
+    // Real nearby-device discovery isn't wired up yet (see the class-level
+    // note above) — so this honestly finds nothing instead of pretending
+    // with fake names. The delay is kept so the spinner still reads as a
+    // real scan rather than an instant, suspicious "0 results".
+    await Future.delayed(const Duration(milliseconds: 1400));
     if (!mounted) return;
     setState(() => _state = _SessionState.picking);
   }
@@ -147,43 +143,66 @@ class _GroupMusicPageState extends State<GroupMusicPage> {
                                 style: TextStyle(color: Colors.white70)),
                           ],
                           if (_state == _SessionState.picking) ...[
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.black26,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                            if (_found.isEmpty) ...[
+                              const Icon(Icons.search_off_rounded, color: Colors.white38, size: 40),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'No devices found nearby.',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                    child: Text('Found — tick to add:',
-                                        style: TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700)),
-                                  ),
-                                  for (final d in _found)
-                                    CheckboxListTile(
-                                      value: d.selected,
-                                      onChanged: (v) => setState(() => d.selected = v ?? false),
-                                      activeColor: AppColors.gold,
-                                      dense: true,
-                                      controlAffinity: ListTileControlAffinity.leading,
-                                      title: Text(d.name, style: const TextStyle(color: Colors.white)),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Make sure everyone is on the same Wi-Fi / Hotspot and has\n'
+                                'Group Music open on their phone, then try again.',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.white54, fontSize: 12),
+                              ),
+                              const SizedBox(height: 16),
+                              _ActionButton(label: 'Search Again', onTap: _startSearch),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: _stopSession,
+                                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                              ),
+                            ] else ...[
+                              Container(
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: Colors.black26,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: AppColors.gold.withOpacity(0.4)),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                      child: Text('Found — tick to add:',
+                                          style: TextStyle(color: AppColors.gold, fontWeight: FontWeight.w700)),
                                     ),
-                                ],
+                                    for (final d in _found)
+                                      CheckboxListTile(
+                                        value: d.selected,
+                                        onChanged: (v) => setState(() => d.selected = v ?? false),
+                                        activeColor: AppColors.gold,
+                                        dense: true,
+                                        controlAffinity: ListTileControlAffinity.leading,
+                                        title: Text(d.name, style: const TextStyle(color: Colors.white)),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 14),
-                            _ActionButton(
-                              label: 'Add / Connect',
-                              onTap: _found.any((d) => d.selected) ? _connectSelected : null,
-                            ),
-                            const SizedBox(height: 8),
-                            TextButton(
-                              onPressed: _stopSession,
-                              child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-                            ),
+                              const SizedBox(height: 14),
+                              _ActionButton(
+                                label: 'Add / Connect',
+                                onTap: _found.any((d) => d.selected) ? _connectSelected : null,
+                              ),
+                              const SizedBox(height: 8),
+                              TextButton(
+                                onPressed: _stopSession,
+                                child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
+                              ),
+                            ],
                           ],
                           if (_state == _SessionState.connected) ...[
                             Container(

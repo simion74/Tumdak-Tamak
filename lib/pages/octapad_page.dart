@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 import '../services/sound_service.dart';
+import '../services/local_store.dart';
 import '../models/octapad_patch.dart';
 import '../widgets/record_sheet.dart';
 
@@ -14,7 +15,7 @@ class OctapadPage extends StatefulWidget {
 
 class _OctapadPageState extends State<OctapadPage> {
   // Patches you can pick from the TUNE list. Starts with the built-in ones;
-  // packages loaded via the UPLOAD button are appended here at runtime.
+  // packages loaded via the ADD SOUND button are appended here at runtime.
   final List<OctapadPatch> _patches = List.of(kOctapadPatches);
   int _customPatchCount = 0;
 
@@ -28,6 +29,28 @@ class _OctapadPageState extends State<OctapadPage> {
   // Bumped every time a pad is hit; used as a TweenAnimationBuilder key so
   // the "light" flash restarts cleanly on every tap, even rapid ones.
   final List<int> _hitTick = List.filled(8, 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreSavedLayouts();
+  }
+
+  /// Any pad rearranging or per-pad sound swapping the user did in Edit
+  /// mode gets saved (see [_setEditMode]) — this loads those back in on
+  /// startup, so a built-in patch's factory KICK/SNARE/HAT-C/HAT-O/TOM/
+  /// CRASH/CLAP/RIM layout is only the *default*, not something that resets
+  /// every time you reopen the app.
+  Future<void> _restoreSavedLayouts() async {
+    for (var i = 0; i < _patches.length; i++) {
+      final saved = await LocalStore.instance.getPatchLayout(_patches[i].id);
+      if (saved == null || saved.length != 8) continue;
+      final pads = saved.map((e) => PadSound(e['label']!, e['soundId']!)).toList();
+      _patches[i] = OctapadPatch(id: _patches[i].id, name: _patches[i].name, pads: pads);
+    }
+    if (!mounted) return;
+    setState(() => _pads = List.of(_patches[_activePatchIndex].pads));
+  }
 
   void _hit(int index) {
     setState(() => _hitTick[index]++);
@@ -54,9 +77,114 @@ class _OctapadPageState extends State<OctapadPage> {
     _selectPatch(next < 0 ? next + _patches.length : next);
   }
 
-  /// UPLOAD: lets the user pick up to 8 of their own sound files from the
+  /// Turning Edit mode OFF (DONE) is the save point: whatever the pads look
+  /// like right now — reordered, and/or with individual sounds swapped via
+  /// the per-pad picker — becomes this patch's layout from now on, both in
+  /// this session and (via LocalStore) after an app restart.
+  void _setEditMode(bool value) {
+    setState(() => _editMode = value);
+    if (!value) {
+      final current = _patches[_activePatchIndex];
+      _patches[_activePatchIndex] = OctapadPatch(id: current.id, name: current.name, pads: List.of(_pads));
+      LocalStore.instance.savePatchLayout(
+        current.id,
+        _pads.map((p) => {'label': p.label, 'soundId': p.soundId}).toList(),
+      );
+    }
+  }
+
+  /// Edit-mode tap-on-a-pad (not drag): opens a picker of every sound from
+  /// every built-in kit, so a pad can be assigned any sound at all — not
+  /// just the 8 that came with the currently-selected patch. This is how
+  /// you build your own custom arrangement for new music, professional
+  /// style, instead of only being able to reorder the existing 8.
+  Future<void> _openSoundPicker(int padIndex) async {
+    final chosen = await showModalBottomSheet<LibrarySound>(
+      context: context,
+      backgroundColor: AppColors.panelDark,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GoldText('Choose a Sound — Pad ${padIndex + 1}', fontSize: 18),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Pick any sound from any kit, or load your own file',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                  const SizedBox(height: 10),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.upload_file_rounded, color: AppColors.goldBright),
+                    title: const Text('Upload a sound from this device', style: TextStyle(color: AppColors.goldBright, fontWeight: FontWeight.w700)),
+                    onTap: () => Navigator.of(context).pop(),
+                    trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white38),
+                  ),
+                  const Divider(color: Colors.white24, height: 18),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: kAllLibrarySounds.length,
+                      itemBuilder: (context, i) {
+                        final s = kAllLibrarySounds[i];
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                          title: Text(s.displayName, style: const TextStyle(color: Colors.white)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.play_circle_fill_rounded, color: AppColors.goldBright),
+                            tooltip: 'Preview',
+                            onPressed: () => SoundService.instance.play(s.soundId),
+                          ),
+                          onTap: () => Navigator.of(context).pop(s),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    if (chosen != null) {
+      setState(() => _pads[padIndex] = PadSound(chosen.label, chosen.soundId));
+      return;
+    }
+
+    // User tapped "Upload a sound from this device" (popped with null via
+    // that ListTile) — fall through to the file picker for this one pad.
+    await _uploadSoundForPad(padIndex);
+  }
+
+  Future<void> _uploadSoundForPad(int padIndex) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final file = result?.files.single;
+    final path = file?.path;
+    if (path == null) return;
+    final soundId = '${_patches[_activePatchIndex].id}_custom_pad${padIndex}_${DateTime.now().millisecondsSinceEpoch}';
+    await SoundService.instance.registerDeviceSound(soundId, path);
+    final rawName = file!.name.split('.').first.toUpperCase();
+    final label = rawName.length > 6 ? rawName.substring(0, 6) : rawName;
+    if (!mounted) return;
+    setState(() => _pads[padIndex] = PadSound(label.isEmpty ? 'PAD ${padIndex + 1}' : label, soundId));
+  }
+
+  /// ADD SOUND: lets the user pick up to 8 of their own sound files from the
   /// device and turns them into a brand-new patch, added to the TUNE list.
-  Future<void> _uploadPackage() async {
+  Future<void> _addSoundPackage() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.audio,
       allowMultiple: true,
@@ -135,11 +263,11 @@ class _OctapadPageState extends State<OctapadPage> {
                 controller: scrollController,
                 padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                 children: [
-                  const GoldText('সাউন্ড প্যাকেজ বাছাই করুন', fontSize: 18),
+                  const GoldText('Choose Sound Package', fontSize: 18),
                   const SizedBox(height: 4),
                   Text(
-                    'মোট ${_patches.length} ধরনের প্যাচ প্যাকেজ আছে — নাম চাপলে সিলেক্ট হবে, '
-                    'পাশের \u25B6 বাটনে চাপলে আগে শুনে দেখতে পারবেন',
+                    '${_patches.length} packages available — tap a name to select it, '
+                    'tap the \u25B6 button beside it to preview first',
                     style: const TextStyle(color: Colors.white54, fontSize: 12),
                   ),
                   const SizedBox(height: 10),
@@ -182,9 +310,9 @@ class _OctapadPageState extends State<OctapadPage> {
                 onNextPatch: () => _cyclePatch(1),
                 onPatchTap: _openTuneSheet,
                 onTune: _openTuneSheet,
-                onEditToggle: () => setState(() => _editMode = !_editMode),
+                onEditToggle: () => _setEditMode(!_editMode),
                 onMusic: _pickMusic,
-                onUpload: _uploadPackage,
+                onUpload: _addSoundPackage,
                 onRecord: () => showRecordSheet(context, instrumentName: 'Octapad'),
                 onPlayPause: _toggleMusicPlayPause,
               ),
@@ -251,26 +379,34 @@ class _OctapadPageState extends State<OctapadPage> {
       );
     }
 
-    // Edit mode: press-and-hold then drag onto another pad to swap places.
-    return DragTarget<int>(
-      onWillAccept: (data) => data != null && data != index,
-      onAccept: (data) => _swap(data, index),
-      builder: (context, candidateData, rejectedData) {
-        final isTargetHover = candidateData.isNotEmpty;
-        return LongPressDraggable<int>(
-          data: index,
-          feedback: Material(
-            color: Colors.transparent,
-            child: SizedBox(width: 90, height: 90, child: content),
-          ),
-          childWhenDragging: Opacity(opacity: 0.3, child: content),
-          child: AnimatedScale(
-            scale: isTargetHover ? 1.06 : 1.0,
-            duration: const Duration(milliseconds: 120),
-            child: content,
-          ),
-        );
-      },
+    // Edit mode: quick tap opens the sound-picker for this pad; press-and-
+    // hold then drag onto another pad swaps their positions instead. A
+    // plain GestureDetector(onTap) layered outside the long-press
+    // recognizer works fine here — Flutter's gesture arena resolves a
+    // released-before-the-long-press-threshold touch as a tap, so the two
+    // never fight over the same touch.
+    return GestureDetector(
+      onTap: () => _openSoundPicker(index),
+      child: DragTarget<int>(
+        onWillAccept: (data) => data != null && data != index,
+        onAccept: (data) => _swap(data, index),
+        builder: (context, candidateData, rejectedData) {
+          final isTargetHover = candidateData.isNotEmpty;
+          return LongPressDraggable<int>(
+            data: index,
+            feedback: Material(
+              color: Colors.transparent,
+              child: SizedBox(width: 90, height: 90, child: content),
+            ),
+            childWhenDragging: Opacity(opacity: 0.3, child: content),
+            child: AnimatedScale(
+              scale: isTargetHover ? 1.06 : 1.0,
+              duration: const Duration(milliseconds: 120),
+              child: content,
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -386,8 +522,8 @@ class _Toolbar extends StatelessWidget {
               Expanded(
                 child: _StripButton.icon(
                   iconAsset: 'assets/images/icon/upload_icon.png',
-                  tooltip: 'Upload',
-                  label: 'UPLOAD',
+                  tooltip: 'Add a sound package',
+                  label: 'ADD SOUND',
                   onTap: onUpload,
                   fill: true,
                 ),
@@ -472,7 +608,7 @@ class _PatchRow extends StatelessWidget {
               ),
               IconButton(
                 onPressed: onPreview,
-                tooltip: 'শুনুন',
+                tooltip: 'Preview',
                 icon: const Icon(Icons.play_circle_fill_rounded, color: AppColors.goldBright, size: 24),
               ),
             ],
