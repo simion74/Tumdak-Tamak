@@ -46,6 +46,28 @@ jobs:
           curl -sSL -o gradlew.bat https://raw.githubusercontent.com/gradle/gradle/v8.6.0/gradlew.bat
           chmod +x gradlew
 
+      - name: Set up release signing key
+        # Recreates the upload keystore and key.properties from GitHub Secrets
+        # (Settings → Secrets and variables → Actions) so the release APK is
+        # signed with the real upload key instead of the debug key.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.UPLOAD_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          else
+            echo "UPLOAD_KEYSTORE_BASE64 secret not set — release APK will be signed with the debug key."
+          fi
+
       - name: Build release APK
         run: flutter build apk --release
 
