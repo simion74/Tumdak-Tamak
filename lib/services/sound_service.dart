@@ -112,23 +112,38 @@ class SoundService {
 
   /// Call once at app start (see main.dart) so the very first tap has no
   /// extra loading delay.
+  ///
+  /// IMPORTANT: players are intentionally NOT put into PlayerMode.lowLatency.
+  /// On Android, combining lowLatency with ReleaseMode.stop is a confirmed
+  /// audioplayers bug (github.com/bluefireteam/audioplayers/issues/1489):
+  /// low-latency mode disables the stream-completion signal the player
+  /// needs to reset itself, so a pad plays once and then never again. The
+  /// default (mediaPlayer) mode doesn't have this problem and still keeps
+  /// ReleaseMode.stop so repeated resume() calls stay fast.
   Future<void> preload() async {
     if (_ready) return;
-    for (final entry in _assetFor.entries) {
+    // Load every sound concurrently instead of one at a time — with ~50
+    // sounds, awaiting each sequentially could take many seconds and would
+    // also matter less; loading them all in parallel is both faster overall
+    // and finishes evenly instead of some sounds becoming usable long
+    // before others.
+    final loaded = await Future.wait(_assetFor.entries.map((entry) async {
       final player = AudioPlayer(playerId: entry.key);
-      await player.setPlayerMode(PlayerMode.lowLatency);
       await player.setSourceAsset(entry.value);
       await player.setReleaseMode(ReleaseMode.stop);
-      _players[entry.key] = player;
-    }
-    // A small pool of extra low-latency players reused round-robin for
-    // echo/reverb repeats, so a fast run of hits never runs out.
-    for (var i = 0; i < 4; i++) {
+      return MapEntry(entry.key, player);
+    }));
+    _players.addEntries(loaded);
+
+    // A small pool of extra players reused round-robin for echo/reverb
+    // repeats, so a fast run of hits never runs out.
+    final tails = await Future.wait(List.generate(4, (i) async {
       final p = AudioPlayer(playerId: 'tail_$i');
-      await p.setPlayerMode(PlayerMode.lowLatency);
       await p.setReleaseMode(ReleaseMode.stop);
-      _tailPlayers.add(p);
-    }
+      return p;
+    }));
+    _tailPlayers.addAll(tails);
+
     // Restore any EQ the user saved last time for the built-in drum sounds.
     for (final id in ['tumdak_left', 'tumdak_right', 'tamak']) {
       _eq[id] = await LocalStore.instance.getEq(id);
@@ -166,10 +181,21 @@ class SoundService {
     final eq = eqFor(soundId);
     final gain = (volume * (eq['volume'] ?? 1.0)).clamp(0.0, 1.5);
     final rate = (eq['rate'] ?? 1.0).clamp(0.5, 1.8);
-    await player.setPlaybackRate(rate);
-    await player.setVolume(gain);
-    await player.seek(Duration.zero);
-    await player.resume();
+    try {
+      // setPlaybackRate/setVolume/seek are independent of each other, so run
+      // them concurrently instead of awaiting one-by-one — this cuts the
+      // number of sequential platform-channel round trips before the sound
+      // actually starts, which is most of the tap-to-sound delay.
+      await Future.wait([
+        player.setPlaybackRate(rate),
+        player.setVolume(gain),
+        player.seek(Duration.zero),
+      ]);
+      await player.resume();
+    } catch (_) {
+      // Best-effort: a hiccup on this one retrigger should never leave the
+      // pad permanently silent for later taps.
+    }
 
     _fireEchoAndReverb(soundId, eq, gain, rate);
   }
@@ -225,7 +251,6 @@ class SoundService {
       await existing.dispose();
     }
     final player = AudioPlayer(playerId: soundId);
-    await player.setPlayerMode(PlayerMode.lowLatency);
     await player.setSourceDeviceFile(filePath);
     await player.setReleaseMode(ReleaseMode.stop);
     _players[soundId] = player;
