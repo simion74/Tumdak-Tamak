@@ -203,15 +203,33 @@ class _OctapadPageState extends State<OctapadPage> {
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
-                  child: GridView.builder(
-                    itemCount: 8,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 8,
-                      crossAxisSpacing: 8,
-                      childAspectRatio: 1.05,
-                    ),
-                    itemBuilder: (context, index) => _buildPad(index),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // 8 pads laid out as 4 columns x 2 rows. Instead of a
+                      // fixed childAspectRatio (which made pads too tall to
+                      // fit both rows on shorter screens, forcing a scroll),
+                      // work out the aspect ratio from the actual space we
+                      // have so both rows always fit on one screen — pads
+                      // just get shorter on smaller screens instead.
+                      const crossAxisCount = 4;
+                      const rows = 2;
+                      const spacing = 8.0;
+                      final cellWidth =
+                          (constraints.maxWidth - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final cellHeight = (constraints.maxHeight - spacing * (rows - 1)) / rows;
+                      final aspectRatio = cellWidth / cellHeight;
+                      return GridView.builder(
+                        itemCount: 8,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          mainAxisSpacing: spacing,
+                          crossAxisSpacing: spacing,
+                          childAspectRatio: aspectRatio,
+                        ),
+                        itemBuilder: (context, index) => _buildPad(index),
+                      );
+                    },
                   ),
                 ),
               ),
