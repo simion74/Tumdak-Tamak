@@ -129,4 +129,32 @@ class LocalStore {
   // ---------------- general app settings ----------------
   Future<bool> getHapticEnabled() async => (await _p).getBool('haptic_enabled') ?? true;
   Future<void> setHapticEnabled(bool v) async => (await _p).setBool('haptic_enabled', v);
+
+  // ---------------- Octapad custom pad layouts ----------------
+  // Lets a user's Edit-mode changes (reordering pads, or swapping in a
+  // different sound per pad) survive switching away to another patch and
+  // switching back, and survive app restarts — keyed by patch id so each
+  // built-in/custom patch remembers its own layout independently.
+  // Stored as JSON: [{"label": "KICK", "soundId": "octapad_santali_kick"}, ...]
+  Future<List<Map<String, String>>?> getPatchLayout(String patchId) async {
+    final p = await _p;
+    final raw = p.getString('octapad_layout_$patchId');
+    if (raw == null) return null;
+    try {
+      final list = (jsonDecode(raw) as List).cast<Map<String, dynamic>>();
+      return list.map((e) => {'label': e['label'].toString(), 'soundId': e['soundId'].toString()}).toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> savePatchLayout(String patchId, List<Map<String, String>> pads) async {
+    final p = await _p;
+    await p.setString('octapad_layout_$patchId', jsonEncode(pads));
+  }
+
+  Future<void> clearPatchLayout(String patchId) async {
+    final p = await _p;
+    await p.remove('octapad_layout_$patchId');
+  }
 }
