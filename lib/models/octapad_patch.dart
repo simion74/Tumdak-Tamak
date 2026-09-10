@@ -131,3 +131,25 @@ const List<OctapadPatch> kOctapadPatches = [
     ],
   ),
 ];
+
+/// A single browsable entry in the "choose a sound for this pad" picker —
+/// one sound from one built-in patch, tagged with which patch/kit it came
+/// from so the list can be grouped and read clearly (e.g. "Trap — SNARE").
+class LibrarySound {
+  final String patchName;
+  final String label;
+  final String soundId;
+  const LibrarySound({required this.patchName, required this.label, required this.soundId});
+
+  String get displayName => '$patchName — $label';
+}
+
+/// Every sound from every built-in patch, flattened into one list — this is
+/// what the Octapad's Edit-mode "choose a sound for this pad" sheet shows,
+/// so any pad can be assigned any sound from any kit, not just the 8 that
+/// happen to belong to the currently-selected patch.
+List<LibrarySound> get kAllLibrarySounds => [
+      for (final patch in kOctapadPatches)
+        for (final pad in patch.pads)
+          LibrarySound(patchName: patch.name, label: pad.label, soundId: pad.soundId),
+    ];
