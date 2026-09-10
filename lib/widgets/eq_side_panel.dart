@@ -161,7 +161,7 @@ class _EqSidePanelState extends State<EqSidePanel> {
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 6),
               child: Text(
-                'পাশের টাচপ্যাডে চেপে চেপে শুনুন',
+                'Tap the touchpad beside it to hear live',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.white38, fontSize: 9.5),
               ),
@@ -173,7 +173,7 @@ class _EqSidePanelState extends State<EqSidePanel> {
                 children: [
                   Expanded(
                     child: _VerticalFader(
-                      label: 'ভলিউম',
+                      label: 'Volume',
                       value: eq['volume']!,
                       min: 0.0,
                       max: 1.5,
@@ -184,34 +184,34 @@ class _EqSidePanelState extends State<EqSidePanel> {
                   ),
                   Expanded(
                     child: _VerticalFader(
-                      label: 'টোন',
+                      label: 'Tone',
                       value: eq['rate']!,
                       min: 0.7,
                       max: 1.3,
-                      topHint: 'চিকন',
-                      bottomHint: 'মোটা',
+                      topHint: 'Thin',
+                      bottomHint: 'Thick',
                       onChanged: (v) => _update(channel.soundId, 'rate', v),
                     ),
                   ),
                   Expanded(
                     child: _VerticalFader(
-                      label: 'ইকো',
+                      label: 'Echo',
                       value: eq['echo']!,
                       min: 0.0,
                       max: 1.0,
-                      topHint: 'বেশি',
-                      bottomHint: 'কম',
+                      topHint: 'More',
+                      bottomHint: 'Less',
                       onChanged: (v) => _update(channel.soundId, 'echo', v),
                     ),
                   ),
                   Expanded(
                     child: _VerticalFader(
-                      label: 'হল',
+                      label: 'Hall',
                       value: eq['reverb']!,
                       min: 0.0,
                       max: 1.0,
-                      topHint: 'বেশি',
-                      bottomHint: 'কম',
+                      topHint: 'More',
+                      bottomHint: 'Less',
                       onChanged: (v) => _update(channel.soundId, 'reverb', v),
                     ),
                   ),
@@ -226,7 +226,7 @@ class _EqSidePanelState extends State<EqSidePanel> {
                     child: OutlinedButton.icon(
                       onPressed: () => _test(channel.soundId),
                       icon: const Icon(Icons.play_arrow_rounded, size: 16, color: AppColors.goldBright),
-                      label: const Text('টেস্ট', style: TextStyle(fontSize: 10.5)),
+                      label: const Text('TEST', style: TextStyle(fontSize: 10.5)),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.goldBright,
                         side: BorderSide(color: AppColors.gold.withOpacity(0.5)),
