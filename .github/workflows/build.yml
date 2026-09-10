@@ -67,13 +67,31 @@ jobs:
       - name: Build debug APK
         run: flutter build apk --debug
 
+      - name: Set up release signing key
+        # Recreates the upload keystore and key.properties from GitHub Secrets
+        # (Settings → Secrets and variables → Actions) so the release APK is
+        # signed with the real upload key instead of the debug key. If these
+        # secrets aren't set, key.properties won't exist and
+        # android/app/build.gradle falls back to debug signing automatically.
+        env:
+          KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
+          STORE_PASSWORD: ${{ secrets.UPLOAD_STORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+            cat > android/key.properties <<EOF
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+          else
+            echo "UPLOAD_KEYSTORE_BASE64 secret not set — release APK will be signed with the debug key."
+          fi
+
       - name: Build release APK
-        # NOTE: this app has no release signing key configured yet
-        # (android/app/build.gradle currently signs release builds with the
-        # built-in debug key — see the TODO comment there). That's fine for
-        # your own testing/installing on a phone, but before publishing to
-        # the Play Store you must generate a real upload keystore and wire
-        # it in (see README "Play Store এ পাবলিশ করার আগে" section).
         run: flutter build apk --release
 
       - name: Upload debug APK artifact
